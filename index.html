@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Leaflet Layers Tree Basic Demo</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
+    <link rel="stylesheet" href="L.Control.Layers.Tree.css" crossorigin=""/>
+    <style type="text/css">
+        html, body { width: 100%; height: 100%; margin: 0; }
+        #map { width: 100%; height: 100%; }
+        .leaflet-control-layers-toggle {
+            background-image: url('https://unpkg.com/leaflet@1.7.1/dist/images/layers.png');
+            background-size: 26px 26px;
+            width: 26px;
+            height: 26px;
+        }
+        .leaflet-control-layers-list .leaflet-layerstree-header {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .leaflet-control-layers-list .leaflet-layerstree-header .leaflet-layerstree-children .leaflet-layerstree-header {
+            font-weight: normal;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <label for="coords">Koordinatlar (virgülle ayrılmış lat,lng çiftleri):</label>
+        <input type="text" id="coords" placeholder="37.7749,-122.4194, 37.7849,-122.4094, ...">
+        <button onclick="drawPolygon()">Poligon Çiz</button>
+    </div>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
+    <script src="L.Control.Layers.Tree.js"></script>
+    <script type="text/javascript">
+        var map = L.map('map').setView([51.505, -0.09], 10);
+
+        var openStreetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: '© OpenStreetMap'
+        });
+
+        var openTopoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: '© OpenTopoMap'
+        });
+
+        map.on('layeradd layerremove', function () {
+            var bounds = new L.LatLngBounds();
+            map.eachLayer(function (layer) {
+                if (layer instanceof L.FeatureGroup) {
+                    bounds.extend(layer.getBounds());
+                }
+            });
+
+            if (bounds.isValid()) {
+                map.fitBounds(bounds);
+            } else {
+                map.fitWorld();
+            }
+        });
+
+        var aScenario = new L.FeatureGroup([
+            new L.Marker([38.01372, 39.8881]).bindPopup('A Scenario Marker 1'),
+            new L.Marker([37.01538, 42.1694]).bindPopup('A Scenario Marker 2'),
+            new L.Marker([36.25781, 39.2561]).bindPopup('A Scenario Marker 3')
+        ]);
+
+        L.rectangle([
+            [38.49906596404472, 38.33653523670128],
+            [35.4512513386467, 43.36930390470792]
+        ]).addTo(aScenario);
+
+        var bScenario = new L.FeatureGroup([
+            new L.Marker([39.81557926336049, 29.617432333479684]).bindPopup('B Scenario Marker 1'),
+            new L.Marker([39.568194252016724, 30.00322365295699]).bindPopup('B Scenario Marker 2'),
+            new L.Marker([39.591792915885804, 29.675607214988617]).bindPopup('B Scenario Marker 3'),
+            new L.Marker([39.83909348986259, 29.695509148136352]).bindPopup('B Scenario Marker 4')
+        ]);
+
+        L.rectangle([
+            [40.04801538244641, 29.17805888629769],
+            [39.31163251439486, 30.32318550125268]
+        ]).addTo(bScenario);
+
+        openStreetMap.addTo(map);
+
+        var baseTree = {
+            label: 'MAPS',
+            children: [
+                {
+                    label: 'World',
+                    children: [
+                        { label: 'OpenStreetMap', layer: openStreetMap },
+                        { label: 'Topography', layer: openTopoMap }
+                    ]
+                }
+            ]
+        };
+
+        var overlayTree = {
+            label: 'SCENARIOS',
+            children: [
+                { label: 'Scenarios A', layer: aScenario },
+                { label: ' Scenarios B', layer: bScenario }
+            ]
+        };
+
+        var ctl = L.control.layers.tree(baseTree, overlayTree, {
+            closedSymbol: '+',
+            openedSymbol: '-',
+            spaceSymbol: ' ',
+            selectorBack: false,
+            namedToggle: false,
+            labelIsSelector: 'both'
+        }).addTo(map);
+
+        L.CursorHandler = L.Handler.extend({
+            initialize: function (map) {
+                this._map = map;
+            },
+            
+            addHooks: function () {
+                this._popup = new L.Popup();
+                this._map.on('mouseover', this._open, this);
+                this._map.on('mousemove', this._update, this);
+                this._map.on('mouseout', this._close, this);
+            },
+
+            removeHooks: function () {
+                this._map.off('mouseover', this._open, this);
+                this._map.off('mousemove', this._update, this);
+                this._map.off('mouseout', this._close, this);
+            },
+            
+            _open: function (e) {
+                this._update(e);
+                this._popup.openOn(this._map);
+            },
+
+            _close: function () {
+                this._map.closePopup(this._popup);
+            },
+
+            _update: function (e) {
+                this._popup.setLatLng(e.latlng)
+                    .setContent(e.latlng.toString());
+            }
+        });
+
+        map.addHandler('cursor', L.CursorHandler);
+        map.cursor.enable();
+
+        function drawPolygon() {
+            var input = document.getElementById('coords').value;
+            var coordPairs = input.split(',');
+            var polygonCoords = [];
+
+            for (var i = 0; i < coordPairs.length; i += 2) {
+                var lat = parseFloat(coordPairs[i]);
+                var lng = parseFloat(coordPairs[i + 1]);
+                polygonCoords.push([lat, lng]);
+            }
+
+            if (window.polygon) {
+                map.removeLayer(window.polygon);
+            }
+
+            window.polygon = L.polygon(polygonCoords, {
+                color: 'blue',
+                fillColor: 'blue',
+                fillOpacity: 0.4
+            }).addTo(map);
+
+            map.fitBounds(window.polygon.getBounds());
+
+            window.polygon.on('click', function (e) {
+                if (selectedArea) {
+                    selectedArea.setStyle({ color: 'blue' });
+                    distancePolylines.forEach(function(polyline) {
+                        map.removeLayer(polyline);
+                    });
+                    distancePolylines = [];
+                }
+
+                selectedArea = e.target;
+                selectedArea.setStyle({ color: 'red' });
+
+                var latlngs = selectedArea.getLatLngs()[0];
+                for (var i = 0; i < latlngs.length; i++) {
+                    var nextIndex = (i + 1) % latlngs.length;
+                    var distance = latlngs[i].distanceTo(latlngs[nextIndex]) / 1000;
+
+                    var midPoint = [
+                        (latlngs[i].lat + latlngs[nextIndex].lat) / 2,
+                        (latlngs[i].lng + latlngs[nextIndex].lng) / 2
+                    ];
+
+                    var polyline = L.polyline([latlngs[i], latlngs[nextIndex]], { color: 'blue' }).addTo(map);
+                    polyline.bindTooltip(distance.toFixed(2) + ' km', { permanent: true, className: "distance-tooltip" }).openTooltip(midPoint);
+                    distancePolylines.push(polyline);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
